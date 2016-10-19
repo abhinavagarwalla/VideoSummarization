@@ -18,12 +18,12 @@ from nltk.tokenize import RegexpTokenizer
 from moviepy.editor import *
 from keras import backend as K
 
-#-*- coding: utf-8 -*-
 import math
 import os
 #import ipdb
+tf.python.control_flow_ops = tf
 
-# with tf.device('/cpu:0'):
+# with tf.device('/gpu:0'):
 def VGG_16(weights_path=None):
     model = Sequential()
     model.add(ZeroPadding2D((1,1),input_shape=(3,224,224)))
@@ -94,7 +94,7 @@ class Caption_Generator():
 		self.n_lstm_steps = n_lstm_steps
 		self.batch_size = batch_size
 
-		with tf.device("/cpu:0"):
+		with tf.device("/gpu:0"):
 			self.Wemb = tf.Variable(tf.random_uniform([n_words, dim_embed], -1.0, 1.0), name='Wemb')
 
 		self.init_hidden_W = self.init_weight(dim_ctx, dim_hidden, name='init_hidden_W')
@@ -153,7 +153,7 @@ class Caption_Generator():
 				word_emb = tf.zeros([self.batch_size, self.dim_embed])
 			else:
 				tf.get_variable_scope().reuse_variables()
-				with tf.device("/cpu:0"):
+				with tf.device("/gpu:0"):
 					word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:,ind-1])
 
 			x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
@@ -255,7 +255,7 @@ class Caption_Generator():
 
 			max_prob_word = tf.argmax(logit_words, 1)
 
-			with tf.device("/cpu:0"):
+			with tf.device("/gpu:0"):
 				word_emb = tf.nn.embedding_lookup(self.Wemb, max_prob_word)
 
 			generated_words.append(max_prob_word)
@@ -293,7 +293,7 @@ def preProBuildWordVocab(sentence_iterator, word_count_threshold=30): # borrowed
 	return wordtoix, ixtoword, bias_init_vector
 
 n_epochs=1000
-batch_size=120
+batch_size=80
 dim_embed=256
 dim_ctx=512
 dim_hidden=256
@@ -302,7 +302,7 @@ pretrained_model_path = None
 #############################
 annotation_path = 'annotations.pickle'
 # feat_path = '../../show_attend_and_tell.tensorflow/data/feats.npy'
-model_path = 'model-35'
+model_path = './model-35'
 #############################
 
 def finish_parsing():
@@ -329,7 +329,7 @@ if __name__ == '__main__':
 	n_words = len(wordtoix)
 
 	print 'Starting session', n_words
-	sess = tf.InteractiveSession(config=tf.ConfigProto(log_device_placement=True))
+	sess = tf.InteractiveSession()#config=tf.ConfigProto(log_device_placement=True))
 	print 'interetdd'
 	caption_generator = Caption_Generator(
 			n_words=n_words,
@@ -364,7 +364,7 @@ if __name__ == '__main__':
 		for frame in video.iter_frames():
 			img_list.append(np.transpose(misc.imresize(frame, (vgg16_nrows, vgg16_ncols, vgg16_nchannels)), (2, 0, 1)))
 
-		num_frames = 52
+		num_frames = 28
 		vgg_feat = (vgg16_out([img_list[:num_frames], 0])[0])
 		vgg_feat = np.transpose(np.reshape(vgg_feat, (vgg_feat.shape[0], vgg_feat.shape[1], vgg_feat.shape[2] * vgg_feat.shape[3])), (0, 2, 1))
 		video_key[filename.replace('.avi', '')] = vgg_feat
