@@ -27,10 +27,10 @@ class Movie2Caption(object):
         self.n_words = n_words
         self.K = n_frames
         self.OutOf = outof
-        self.value_dim = 256
+        self.value_dim = 4096
 
-        self.mb_size_train = 64 #mb_size_train
-        self.mb_size_test = 64 #mb_size_test
+        self.mb_size_train = 128 #mb_size_train
+        self.mb_size_test = 128 #mb_size_test
         self.non_pickable = []
         
         self.load_data()
@@ -159,8 +159,8 @@ class Movie2Caption(object):
             self.valid = common.load_pkl(dataset_path + 'valid.pkl')
             self.test = common.load_pkl(dataset_path + 'test.pkl')
             self.CAP = common.load_pkl(dataset_path + 'CAP.pkl')
-            self.FEAT = common.load_pkl('../preprocessing/video_keys.pkl')
-            self.VALUES = common.load_pkl('../preprocessing/video_values.pkl')#dataset_path + 'FEAT_key_vidID_value_features.pkl')
+            self.FEAT = common.load_pkl('../preprocessing/video_keys_pool.pkl')
+            self.VALUES = common.load_pkl('../preprocessing/video_values_pool.pkl')#dataset_path + 'FEAT_key_vidID_value_features.pkl')
             self.train_ids = ['vid%s'%i for i in range(1,1201)]
             self.valid_ids = ['vid%s'%i for i in range(1201,1301)]
             self.test_ids = ['vid%s'%i for i in range(1301,1971)]
