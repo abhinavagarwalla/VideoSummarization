@@ -130,7 +130,7 @@ def generate_sample_gpu_single_process(
             
             sidx = numpy.argmin(score)
             sample = sample[sidx]
-            print "valid : ", _seqs2words([sample])[0], "train : ", caption
+            #print "valid : ", _seqs2words([sample])[0], "train : ", caption
             samples.append(sample)
         samples = _seqs2words(samples)
         return samples

@@ -912,7 +912,7 @@ class Attention(object):
               ):
         self.rng_numpy, self.rng_theano = common.get_two_rngs()
 
-        save_model_dir = 'key_value2'
+        save_model_dir = 'kv2048_0005_'
         model_options = locals().copy()
         if 'self' in model_options:
             del model_options['self']
@@ -921,6 +921,7 @@ class Attention(object):
         with open('%smodel_options.pkl'%save_model_dir, 'wb') as f:
             pkl.dump(model_options, f)
 
+	lrate = 0.0005
         print 'Loading data, lrate', lrate, validFreq
         self.engine = data_engine.Movie2Caption('attention', dataset,
                                            video_feature,
@@ -929,7 +930,7 @@ class Attention(object):
                                            K, OutOf)
         model_options['ctx_dim'] = self.engine.ctx_dim
         model_options['value_dim'] = self.engine.value_dim
-        model_options['dim'] = 512
+        model_options['dim'] = 2048
 	# set test values, for debugging
         [self.x_tv, self.mask_tv,
          self.ctx_tv, self.ctx_mask_tv, self.value_tv, self.value_mask_tv] = data_engine.prepare_data(

@@ -21,7 +21,7 @@ def make_list(filename):
 		return
 	fsplit = filename.split('.')[0]
 	#flist = os.listdir('../data/y2t_images/'+fsplit)
-	flist = glob('/home/abhinav/Desktop/VideoSummarization/data/y2t_images/'+fsplit+'/*')
+	flist = glob('/home/bt0/12CS10045/VideoSummarization/data/y2t_images/'+fsplit+'/*')
 	flist = sorted(flist, key = lambda x: float(x.split('.')[0].split('/')[-1]))
 	print len(flist), len(flist)/28
 	#ik =  np.arange(0, len(flist)-len(flist)/28, len(flist)/28.)
