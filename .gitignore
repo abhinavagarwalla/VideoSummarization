@@ -23,3 +23,4 @@
 *.ico
 data
 *.npz
+*.pkl

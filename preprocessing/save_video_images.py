@@ -19,7 +19,7 @@ def make_list(filename):
 		return
 	fsplit = filename.split('.')[0]
 	#flist = os.listdir('../data/y2t_images/'+fsplit)
-	flist = glob('/home/abhinav/Desktop/VideoSummarization/data/y2t_images/'+fsplit+'/*')
+	flist = glob('/home/bt0/12CS10045/VideoSummarization/data/y2t_images/'+fsplit+'/*')
 	flist = sorted(flist, key = lambda x: float(x.split('.')[0].split('/')[-1]))
 	fw = open('../data/y2t_list/'+fsplit+'.txt', 'w')
 	fw.write("\n".join(flist))
@@ -27,14 +27,15 @@ def make_list(filename):
 	fw.close()
 
 if __name__ == '__main__':
-	#filelist = os.listdir('../data/youtubeclips-dataset')
-	filelist = glob('/home/abhinav/Desktop/VideoSummarization/data/y2t_list/*')
-	fw = open('../data/input_list.txt', 'w')
-	fw.write("\n".join(filelist))
-	fw.write("\n")
-	fw.close()
+	#flist = os.listdir('../data/youtubeclips-dataset')
+	filelist = glob('/home/bt0/12CS10045/VideoSummarization/data/y2t_list/*')
+	for i in range(0,1950, 50):
+		fw = open('../data/input_list_'+str(i)+'.txt', 'w')
+		fw.write("\n".join(filelist))
+		fw.write("\n")
+		fw.close()
 	# print filelist
 	#make_list('vid100.avi')
-	#multiprocessing.Pool().map(save_images, flist)
+	#multiprocessing.Pool().map(make_list, flist)
 	#multiprocessing.Pool().map(make_list, filelist)
 	
