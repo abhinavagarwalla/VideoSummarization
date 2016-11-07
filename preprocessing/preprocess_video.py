@@ -17,8 +17,6 @@ import cPickle as pickle
 from nltk.tokenize import RegexpTokenizer
 from moviepy.editor import *
 from keras import backend as K
-
-#-*- coding: utf-8 -*-
 import math
 import os
 #import ipdb
@@ -202,7 +200,6 @@ class Caption_Generator():
 		loss = loss / tf.reduce_sum(mask)
 		return loss, context, sentence, mask
 
-# change in this function
 	def build_generator(self, maxlen):
 		context = tf.placeholder("float32", [None, self.ctx_shape[0], self.ctx_shape[1]])
 		h, c = self.get_initial_lstm(tf.reduce_mean(context, 1))

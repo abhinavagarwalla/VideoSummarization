@@ -215,7 +215,8 @@ class Attention(object):
         params[_p(prefix,'Wc_att')] = Wc_att
 
         # attention: LSTM -> hidden
-        Wd_att = norm_weight(dim,dimctx)
+        # Wd_att = norm_weight(dim,dimctx)
+        Wd_att = norm_weight(dimctx,dimctx)
         params[_p(prefix,'Wd_att')] = Wd_att
 
         # attention: hidden bias
@@ -300,12 +301,13 @@ class Attention(object):
             return _x[:, n*dim:(n+1)*dim]
 
         def _step(m_, x_, # sequences
-                  h_, c_, a_, ct_, # outputs_info
+                  h_, c_, a_, kct_, vct_, # outputs_info
                   pctx_, ctx_, Wd_att, U_att, c_att, W_sel, b_sel, U, Wc, # non_sequences
                   dp_=None, dp_att_=None):
             # attention
             print ('in scan')
-            pstate_ = tensor.dot(h_, Wd_att)
+            #pstate_ = tensor.dot(h_, Wd_att)
+            pstate_ = tensor.dot(vct_, Wd_att)
             pctx_ = pctx_ + pstate_[:,None,:]
             pctx_list = []
             pctx_list.append(pctx_)
@@ -316,7 +318,8 @@ class Attention(object):
             alpha_pre = alpha
             alpha_shp = alpha.shape
             alpha = tensor.nnet.softmax(alpha.reshape([alpha_shp[0],alpha_shp[1]])) # softmax
-            ctx_ = (value * alpha[:,:,None]).sum(1) # (m,ctx_dim)  # change context to value here
+            kctx_ = (context * alpha[:,:,None]).sum(1) # (m,ctx_dim)  # change context to value here
+            vctx_ = (value * alpha[:,:,None]).sum(1)
             if options['selector']:
                 sel_ = tensor.nnet.sigmoid(tensor.dot(h_, W_sel) + b_sel)
                 sel_ = sel_.reshape([sel_.shape[0]])
@@ -343,7 +346,7 @@ class Attention(object):
 
             h = o * tensor.tanh(c)
             h = m_[:,None] * h + (1. - m_)[:,None] * h_
-            rval = [h, c, alpha, ctx_, pstate_, pctx_, i, f, o, preact, alpha_pre]+pctx_list
+            rval = [h, c, alpha, kctx_, vctx_, pstate_, pctx_, i, f, o, preact, alpha_pre]+pctx_list
             print ('returning from scan')
             return rval
         if options['use_dropout']:
@@ -389,6 +392,7 @@ class Attention(object):
                 outputs_info = [init_state,
                                 init_memory,
                                 tensor.alloc(0., n_samples, pctx_.shape[1]),
+                                tensor.alloc(0., n_samples, context.shape[2]),
                                 tensor.alloc(0., n_samples, value.shape[2]),
                                 None, None, None, None, None, None, None, None],
                                 non_sequences=[pctx_, context, value,
@@ -929,7 +933,7 @@ class Attention(object):
                                            K, OutOf)
         model_options['ctx_dim'] = self.engine.ctx_dim
         model_options['value_dim'] = self.engine.value_dim
-        model_options['dim'] = 512
+        # model_options['dim'] = 512
 	# set test values, for debugging
         [self.x_tv, self.mask_tv,
          self.ctx_tv, self.ctx_mask_tv, self.value_tv, self.value_mask_tv] = data_engine.prepare_data(
