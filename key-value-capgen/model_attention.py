@@ -180,7 +180,7 @@ class Attention(object):
 
 	# Conditional LSTM layer with Attention
 	def param_init_lstm_cond(self, options, params,
-							 prefix='lstm_cond', nin=None, dim=None, dimctx=None, dimvalue=None):
+							 prefix='lstm_cond', nin=None, dim=None, dimctx=None, dimvalue=None, dim_key_add=None):
 		if nin == None:
 			nin = options['dim']
 		if dim == None:
@@ -189,12 +189,22 @@ class Attention(object):
 			dimctx = options['dim']
 		if dimvalue == None:
 			dimvalue = options['dim']
-		# input to LSTM
+		if dim_key_add == None:
+			dim_key_add = options['dim_key_add']
+
+		# input to LSTM decoder
 		W = numpy.concatenate([norm_weight(nin,dim),
 							   norm_weight(nin,dim),
 							   norm_weight(nin,dim),
 							   norm_weight(nin,dim)], axis=1)
 		params[_p(prefix,'W')] = W
+
+		# input to LSTM key Addressing
+		Wk = numpy.concatenate([norm_weight(dimctx, dim_key_add),
+							    norm_weight(dimctx, dim_key_add),
+							    norm_weight(dimctx, dim_key_add),
+							    norm_weight(dimctx, dim_key_add)], axis=1)
+		params[_p(prefix,'Wk')] = Wk
 
 		# LSTM to LSTM
 		U = numpy.concatenate([ortho_weight(dim),
@@ -203,8 +213,16 @@ class Attention(object):
 							   ortho_weight(dim)], axis=1)
 		params[_p(prefix,'U')] = U
 
+		# LSTM to LSTM in key addressing
+		Uk = numpy.concatenate([ortho_weight(dim_key_add),
+							   	ortho_weight(dim_key_add),
+							   	ortho_weight(dim_key_add),
+							   	ortho_weight(dim_key_add)], axis=1)
+		params[_p(prefix,'Uk')] = Uk
+
 		# bias to LSTM
 		params[_p(prefix,'b')] = numpy.zeros((4 * dim,)).astype('float32')
+		params[_p(prefix,'bk')] = numpy.zeros((4 * dim_key_add,)).astype('float32')
 
 		# context to LSTM
 		Wc = norm_weight(dimvalue,dim*4)
@@ -216,7 +234,8 @@ class Attention(object):
 
 		# attention: LSTM -> hidden
 		Wd_att = norm_weight(dim, dimctx)
-		Wk_att = norm_weight(dimctx)
+		Wk_att = norm_weight(dim_key_add)
+
 		#Wd_att = norm_weight(dimctx,dimctx)
 		params[_p(prefix,'Wd_att')] = Wd_att
 		params[_p(prefix,'Wk_att')] = Wk_att
@@ -243,6 +262,8 @@ class Attention(object):
 	def lstm_cond_layer(self, tparams, state_below, options, prefix='lstm',
 						mask=None, context=None, value=None, one_step=False,
 						init_memory=None, init_state=None,
+						init_memory_key=None, init_state_key=None,
+						init_key_ctx=None, init_val_ctx=None,
 						trng=None, use_noise=None,mode=None,
 						**kwargs):
 		# state_below (t, m, dim_word), or (m, dim_word) in sampling
@@ -267,6 +288,7 @@ class Attention(object):
 			mask = tensor.alloc(1., state_below.shape[0], 1)
 
 		dim = tparams[_p(prefix, 'U')].shape[0]
+		dim_key_add = options['dim_key_add']
 
 		# initial/previous state
 		if init_state == None:
@@ -298,19 +320,35 @@ class Attention(object):
 			b_sel = T.alloc(0., 1)
 		U = tparams[_p(prefix, 'U')]
 		Wc = tparams[_p(prefix, 'Wc')]
+		Uk = tparams[_p(prefix, 'Uk')]
+		Wk = tparams[_p(prefix, 'Wk')]
+		bk = tparams[_p(prefix, 'bk')]
+
 		def _slice(_x, n, dim):
 			if _x.ndim == 3:
 				return _x[:, :, n*dim:(n+1)*dim]
 			return _x[:, n*dim:(n+1)*dim]
 
 		def _step(m_, x_, # sequences
-				  h_, c_, a_, kct_, vct_, # outputs_info
-				  pctx_, ctx_, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, # non_sequences
+				  h_, c_, a_, kct_, vct_, h_k_, c_k_,# outputs_info
+				  pctx_, ctx_, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, Uk, Wk, bk,# non_sequences
 				  dp_=None, dp_att_=None):
+			#key addressing LSTM
+			hid_k = tensor.dot(h_k_, Uk)
+			input_k = tensor.dot(kct_, Wk)
+			key_add = input_k + hid_k + bk
+
+			i_k = tensor.nnet.sigmoid(_slice(key_add, 0, dim_key_add))
+			f_k = tensor.nnet.sigmoid(_slice(key_add, 1, dim_key_add))
+			o_k = tensor.nnet.sigmoid(_slice(key_add, 2, dim_key_add))
+			c_k = tensor.tanh(_slice(key_add, 3, dim_key_add))
+
+			c_k = f_k * c_k_ + i_k * c_k
+			h_k = o_k * tensor.tanh(c_k)
+
 			# attention
 			print ('in scan')
-			pstate_ =  tensor.dot(kct_, Wk_att) + tensor.dot(h_, Wd_att) #+
-			print ('here in scan')
+			pstate_ =   tensor.dot(h_, Wd_att) #tensor.dot(h_k, Wk_att) #+
 			pctx_ = pctx_ + pstate_[:,None,:]
 			pctx_list = []
 			pctx_list.append(pctx_)
@@ -350,16 +388,16 @@ class Attention(object):
 
 			h = o * tensor.tanh(c)
 			h = m_[:,None] * h + (1. - m_)[:,None] * h_
-			rval = [h, c, alpha, kctx_, vctx_, pstate_, pctx_, i, f, o, preact, alpha_pre]+pctx_list
+			rval = [h, c, alpha, kctx_, vctx_, h_k, c_k, pstate_, pctx_, i, f, o, preact, alpha_pre] + pctx_list
 			print ('returning from scan')
 			return rval
 		if options['use_dropout']:
 			_step0 = lambda m_, x_, dp_, h_, c_, \
-				a_, kct_, vct_, \
-				pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc: _step(
+				a_, kct_, vct_, h_k_, c_k_, \
+				pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, Uk, Wk, bk: _step(
 				m_, x_, h_, c_,
-				a_, kct_, vct_,
-				pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc,  dp_)
+				a_, kct_, vct_, h_k_, c_k_,
+				pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, Uk, Wk, bk, dp_)
 			dp_shape = state_below.shape
 			if one_step:
 				dp_mask = tensor.switch(use_noise,
@@ -373,18 +411,20 @@ class Attention(object):
 										tensor.alloc(0.5, dp_shape[0], dp_shape[1], 3*dim))
 		else:
 			_step0 = lambda m_, x_, h_, c_, \
-				a_, kct_, vct_, pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc: _step(
-				m_, x_, h_, c_, a_, kct_, vct_, pctx_, context,
-					Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc)
+				a_, kct_, vct_, h_k_, c_k_, pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, Uk, Wk, bk: _step(
+				m_, x_, h_, c_, a_, kct_, vct_, h_k_, c_k_, pctx_, context,
+					Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, Uk, Wk, bk)
 
 		if one_step:
 			if options['use_dropout']:
 				rval = _step0(
-					mask, state_below, dp_mask, init_state, init_memory, None, context.mean(1), value.mean(1),
-					pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc)
+					mask, state_below, dp_mask, init_state, init_memory, None, init_key_ctx, init_val_ctx, 
+					init_state_key, init_memory_key,
+					pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, Uk, Wk, bk)
 			else:
-				rval = _step0(mask, state_below, init_state, init_memory, None, None, None,
-							  pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc)
+				rval = _step0(mask, state_below, init_state, init_memory, None, init_key_ctx, init_val_ctx, 
+					init_state_key, init_memory_key,
+					pctx_, context, Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, Uk, Wk, bk)
 		else:
 			seqs = [mask, state_below]
 			if options['use_dropout']:
@@ -395,11 +435,12 @@ class Attention(object):
 				outputs_info = [init_state,
 								init_memory,
 								tensor.alloc(0., n_samples, pctx_.shape[1]),
-								tensor.alloc(0., n_samples, context.shape[2]),
-								tensor.alloc(0., n_samples, value.shape[2]),
+								init_key_ctx, init_val_ctx,
+								init_state_key,
+								init_memory_key,
 								None, None, None, None, None, None, None, None],
 								non_sequences=[pctx_, context,
-											   Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc],
+											   Wd_att, Wk_att, U_att, c_att, W_sel, b_sel, U, Wc, Uk, Wk, bk],
 								name=_p(prefix, '_layers'),
 								n_steps=nsteps, profile=False, mode=mode, strict=True)
 
@@ -436,10 +477,17 @@ class Attention(object):
 		for lidx in xrange(options['n_layers_init']):
 			params = self.get_layer('ff')[0](
 				options, params, prefix='ff_init_%d'%lidx, nin=ctx_dim, nout=ctx_dim)
+
 		params = self.get_layer('ff')[0](
 			options, params, prefix='ff_state', nin=ctx_dim, nout=options['dim'])
 		params = self.get_layer('ff')[0](
 			options, params, prefix='ff_memory', nin=ctx_dim, nout=options['dim'])
+
+		# init_state, init_hidden state and memory cell in key addressing LSTM
+		params = self.get_layer('ff')[0](
+			options, params, prefix='ff_state_key', nin=ctx_dim, nout=options['dim_key_add'])
+		params = self.get_layer('ff')[0](
+			options, params, prefix='ff_memory_key', nin=ctx_dim, nout=options['dim_key_add'])
 
 		# decoder: LSTM
 		params = self.get_layer('lstm_cond')[0](options, params, prefix='decoder',
@@ -530,6 +578,12 @@ class Attention(object):
 			tparams, ctx_mean, options, prefix='ff_state', activ='tanh')
 		init_memory = self.get_layer('ff')[1](
 			tparams, ctx_mean, options, prefix='ff_memory', activ='tanh')
+		
+		init_state_key = self.get_layer('ff')[1](
+			tparams, ctx.mean(1), options, prefix='ff_state_key', activ='tanh')
+		init_memory_key = self.get_layer('ff')[1](
+			tparams, ctx.mean(1), options, prefix='ff_memory_key', activ='tanh')
+		
 		# decoder
 		proj = self.get_layer('lstm_cond')[1](tparams, emb, options,
 										 prefix='decoder',
@@ -539,6 +593,10 @@ class Attention(object):
 										 one_step=False,
 										 init_state=init_state,
 										 init_memory=init_memory,
+										 init_state_key=init_state_key,
+										 init_memory_key=init_memory_key,
+										 init_key_ctx=ctx0.mean(1),
+										 init_val_ctx=val.mean(1),
 										 trng=trng,
 										 use_noise=use_noise)
 		proj_h = proj[0]
@@ -629,12 +687,18 @@ class Attention(object):
 			tparams, ctx_mean, options, prefix='ff_state', activ='tanh')]
 		init_memory = [self.get_layer('ff')[1](
 			tparams, ctx_mean, options, prefix='ff_memory', activ='tanh')]
-		
 
+		init_state_key = [self.get_layer('ff')[1](
+			tparams, ctx.mean(1), options, prefix='ff_state_key', activ='tanh')]
+		init_memory_key = [self.get_layer('ff')[1](
+			tparams, ctx.mean(1), options, prefix='ff_memory_key', activ='tanh')]
+		
+		# init_key_ctx = ctx.mean(0)
+		# ini
 		print 'Building f_init...',
 		f_init = theano.function(
 			[ctx0, ctx_mask],
-			[ctx0]+init_state+init_memory, name='f_init',
+			[ctx0]+init_state+init_memory+init_state_key+init_memory_key, name='f_init',
 			on_unused_input='ignore',
 			profile=False, mode=mode)
 		print 'Done'
@@ -642,6 +706,10 @@ class Attention(object):
 		x = tensor.vector('x_sampler', dtype='int64')
 		init_state = [tensor.matrix('init_state', dtype='float32')]
 		init_memory = [tensor.matrix('init_memory', dtype='float32')]
+		init_state_key = [tensor.matrix('init_state_key', dtype='float32')]
+		init_memory_key = [tensor.matrix('init_memory_key', dtype='float32')]
+		init_key_ctx = [tensor.matrix('init_key_ctx', dtype='float32')]
+		init_val_ctx = [tensor.matrix('init_val_ctx', dtype='float32')]
 
 		# if it's the first word, emb should be all zero
 		emb = tensor.switch(x[:,None] < 0, tensor.alloc(0., 1, tparams['Wemb'].shape[1]),
@@ -655,10 +723,14 @@ class Attention(object):
 										 one_step=True,
 										 init_state=init_state[0],
 										 init_memory=init_memory[0],
+										 init_state_key=init_state_key[0],
+										 init_memory_key=init_memory_key[0],
+										 init_key_ctx=init_key_ctx[0],
+										 init_val_ctx=init_val_ctx[0],
 										 trng=trng,
 										 use_noise=use_noise,
 										 mode=mode)
-		next_state, next_memory, ctxs = [proj[0]], [proj[1]], [proj[4]]
+		next_state, next_memory, kctxs, ctxs, next_state_key, next_memory_key = [proj[0]], [proj[1]], [proj[3]], [proj[4]], [proj[5]], [proj[6]]
 
 		if options['use_dropout']:
 			proj_h = dropout_layer(proj[0], use_noise, trng)
@@ -689,8 +761,8 @@ class Attention(object):
 		# next word probability
 		print 'building f_next...'
 		f_next = theano.function(
-			[x, ctx0, ctx_mask, val0, val_mask]+init_state+init_memory,
-			[next_probs, next_sample]+next_state+next_memory,
+			[x, ctx0, ctx_mask, val0, val_mask]+init_state+init_memory+init_state_key+init_memory_key+init_key_ctx+init_val_ctx,
+			[next_probs, next_sample]+next_state+next_memory+kctxs+ctxs+next_state_key+next_memory_key+next_key_ctx+next_val_ctx,
 			name='f_next', profile=False, mode=mode, on_unused_input='ignore')
 		print 'Done'
 		return f_init, f_next
@@ -727,6 +799,11 @@ class Attention(object):
 
 		next_state = []
 		next_memory = []
+		next_state_key = []
+		next_memory_key = []
+		next_key_ctx = []
+		next_val_ctx = []
+
 		n_layers_lstm = 1
 		
 		for lidx in xrange(n_layers_lstm):
@@ -735,6 +812,13 @@ class Attention(object):
 		for lidx in xrange(n_layers_lstm):
 			next_memory.append(rval[1+n_layers_lstm+lidx])
 			next_memory[-1] = next_memory[-1].reshape([live_k, next_memory[-1].shape[0]])
+
+		next_state_key.append(rval[1 + 2 * n_layers_lstm])
+		next_memory_key.append(rval[1 + 2 * n_layers_lstm])
+
+		next_key_ctx.append(ctx0.mean(1))
+		next_val_ctx.append(val0.mean(1))
+
 		next_w = -1 * numpy.ones((1,)).astype('int64')
 		# next_state: [(1,512)]
 		# next_memory: [(1,512)]
@@ -937,6 +1021,7 @@ class Attention(object):
 		model_options['ctx_dim'] = self.engine.ctx_dim
 		model_options['value_dim'] = self.engine.value_dim
 		model_options['dim'] = 512
+		model_options['dim_key_add'] = 1024
 		# model_options['encoder'] = 'lstm_uni'
 		# model_options['encoder_dim'] = 1024
 	# set test values, for debugging
