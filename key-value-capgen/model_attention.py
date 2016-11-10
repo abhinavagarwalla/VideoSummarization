@@ -830,7 +830,7 @@ class Attention(object):
 			# ctx_mask: vector
 			# next_state: [matrix]
 			# next_memory: [matrix]
-			print ('in gen sample' , ii, next_state[0].shape, next_memory[0].shape, next_state_key[0].shape, next_memory_key[0].shape, next_key_ctx[0].shape,next_val_ctx[0].shape)
+			#print ('in gen sample' , ii, next_state[0].shape, next_memory[0].shape, next_state_key[0].shape, next_memory_key[0].shape, next_key_ctx[0].shape,next_val_ctx[0].shape)
 			rval = f_next(*([next_w, ctx0, ctx_mask, val0, val_mask]+next_state+next_memory+next_state_key+next_memory_key+next_key_ctx+next_val_ctx))
 			print (rval[2].shape, rval[3].shape)
 			next_p = rval[0]
@@ -843,16 +843,16 @@ class Attention(object):
 			next_memory = []
 			for lidx in xrange(n_layers_lstm):
 				next_memory.append(rval[2+n_layers_lstm+lidx])
-
+			
 			next_state_key[0] = rval[4]
 			next_memory_key[0] = rval[5]
 			next_key_ctx[0] = rval[6]
 			next_val_ctx[0] = rval[7]
-			
+
+			# stochastic = True #hardcoding
 			if stochastic:
 				sample.append(next_w[0]) # take the most likely one
 				sample_score += next_p[0,next_w[0]]
-				print ('2 : ', next_state[0].shape)
 				if next_w[0] == 0:
 					break
 			else:
@@ -870,6 +870,11 @@ class Attention(object):
 				new_hyp_samples = []
 				new_hyp_scores = numpy.zeros(k-dead_k).astype('float32')
 				new_hyp_states = []
+				new_hyp_state_key = []
+				new_hyp_memory_key = []
+				new_hyp_key_ctx = []
+				new_hyp_val_ctx = []
+
 				for lidx in xrange(n_layers_lstm):
 					new_hyp_states.append([])
 				new_hyp_memories = []
@@ -884,11 +889,20 @@ class Attention(object):
 					for lidx in xrange(n_layers_lstm):
 						new_hyp_memories[lidx].append(copy.copy(next_memory[lidx][ti]))
 
+					new_hyp_state_key.append(copy.copy(next_state_key[ti]))
+					new_hyp_memory_key.append(copy.copy(next_memory_key[ti]))
+					new_hyp_key_ctx.append(copy.copy(next_key_ctx[ti]))
+					new_hyp_val_ctx.append(copy.copy(next_val_ctx[ti]))
+
 				# check the finished samples
 				new_live_k = 0
 				hyp_samples = []
 				hyp_scores = []
 				hyp_states = []
+				hyp_state_key = []
+				hyp_memory_key = []
+				hyp_key_ctx = []
+				hyp_val_ctx = []
 				for lidx in xrange(n_layers_lstm):
 					hyp_states.append([])
 				hyp_memories = []
@@ -908,6 +922,10 @@ class Attention(object):
 							hyp_states[lidx].append(new_hyp_states[lidx][idx])
 						for lidx in xrange(n_layers_lstm):
 							hyp_memories[lidx].append(new_hyp_memories[lidx][idx])
+						hyp_state_key.append(new_hyp_state_key[idx])
+						hyp_memory_key.append(new_hyp_memory_key[idx])
+						hyp_key_ctx.append(new_hyp_key_ctx[idx])
+						hyp_val_ctx.append(new_hyp_val_ctx[idx])
 				hyp_scores = numpy.array(hyp_scores)
 				live_k = new_live_k
 
@@ -918,9 +936,16 @@ class Attention(object):
 
 				next_w = numpy.array([w[-1] for w in hyp_samples])
 				next_state = []
+				next_memory = []
+
 				for lidx in xrange(n_layers_lstm):
 					next_state.append(numpy.array(hyp_states[lidx]))
-				next_memory = []
+				
+				next_state_key = []
+				next_memory_key = []
+				next_key_ctx = []
+				next_val_ctx = []
+				
 				for lidx in xrange(n_layers_lstm):
 					next_memory.append(numpy.array(hyp_memories[lidx]))
 				print ('5 : ', next_state[0].shape)
@@ -1198,7 +1223,6 @@ class Attention(object):
 				if numpy.mod(uidx, saveFreq) == 0:
 					pass
 
-				sampleFreq = 10
 				if numpy.mod(uidx, sampleFreq) == 0:
 					use_noise.set_value(0.)
 					def sample_execute(from_which):
@@ -1251,6 +1275,7 @@ class Attention(object):
 					sample_execute(from_which='train')
 					sample_execute(from_which='valid')
 
+				validFreq = 1000
 				if validFreq != -1 and numpy.mod(uidx, validFreq) == 0:
 					print "Validation scores"
 					t0_valid = time.time()
