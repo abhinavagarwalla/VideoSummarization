@@ -234,9 +234,8 @@ class Attention(object):
 
 		# attention: LSTM -> hidden
 		Wd_att = norm_weight(dim, dimctx)
-		Wk_att = norm_weight(dim_key_add)
+		Wk_att = norm_weight(dim_key_add, dimctx)
 
-		#Wd_att = norm_weight(dimctx,dimctx)
 		params[_p(prefix,'Wd_att')] = Wd_att
 		params[_p(prefix,'Wk_att')] = Wk_att
 
@@ -348,7 +347,7 @@ class Attention(object):
 
 			# attention
 			print ('in scan')
-			pstate_ =   tensor.dot(h_, Wd_att) #tensor.dot(h_k, Wk_att) #+
+			pstate_ = tensor.dot(h_, Wd_att) #+ tensor.dot(h_k, Wk_att)
 			pctx_ = pctx_ + pstate_[:,None,:]
 			pctx_list = []
 			pctx_list.append(pctx_)
@@ -435,7 +434,8 @@ class Attention(object):
 				outputs_info = [init_state,
 								init_memory,
 								tensor.alloc(0., n_samples, pctx_.shape[1]),
-								init_key_ctx, init_val_ctx,
+								init_key_ctx, 
+								init_val_ctx,
 								init_state_key,
 								init_memory_key,
 								None, None, None, None, None, None, None, None],
@@ -730,7 +730,7 @@ class Attention(object):
 										 trng=trng,
 										 use_noise=use_noise,
 										 mode=mode)
-		next_state, next_memory, kctxs, ctxs, next_state_key, next_memory_key = [proj[0]], [proj[1]], [proj[3]], [proj[4]], [proj[5]], [proj[6]]
+		next_state, next_memory, next_key_ctx, next_val_ctx, next_state_key, next_memory_key = [proj[0]], [proj[1]], [proj[3]], [proj[4]], [proj[5]], [proj[6]]
 
 		if options['use_dropout']:
 			proj_h = dropout_layer(proj[0], use_noise, trng)
@@ -742,7 +742,7 @@ class Attention(object):
 			logit += emb
 		if options['ctx2out']:
 			logit += self.get_layer('ff')[1](
-				tparams, ctxs[-1], options, prefix='ff_logit_ctx', activ='linear')
+				tparams, next_val_ctx[-1], options, prefix='ff_logit_ctx', activ='linear')
 		logit = tanh(logit)
 		if options['use_dropout']:
 			logit = dropout_layer(logit, use_noise, trng)
@@ -762,7 +762,7 @@ class Attention(object):
 		print 'building f_next...'
 		f_next = theano.function(
 			[x, ctx0, ctx_mask, val0, val_mask]+init_state+init_memory+init_state_key+init_memory_key+init_key_ctx+init_val_ctx,
-			[next_probs, next_sample]+next_state+next_memory+kctxs+ctxs+next_state_key+next_memory_key+next_key_ctx+next_val_ctx,
+			[next_probs, next_sample]+next_state+next_memory+next_state_key+next_memory_key+next_key_ctx+next_val_ctx,
 			name='f_next', profile=False, mode=mode, on_unused_input='ignore')
 		print 'Done'
 		return f_init, f_next
@@ -816,8 +816,9 @@ class Attention(object):
 		next_state_key.append(rval[1 + 2 * n_layers_lstm])
 		next_memory_key.append(rval[1 + 2 * n_layers_lstm])
 
-		next_key_ctx.append(ctx0.mean(1))
-		next_val_ctx.append(val0.mean(1))
+		next_key_ctx.append(numpy.mean(ctx0, axis=0).reshape((1, options['ctx_dim'])))
+		next_val_ctx.append(numpy.mean(val0, axis=0).reshape((1, options['value_dim'])))
+		print (numpy.asarray(ctx0).shape)
 
 		next_w = -1 * numpy.ones((1,)).astype('int64')
 		# next_state: [(1,512)]
@@ -829,7 +830,9 @@ class Attention(object):
 			# ctx_mask: vector
 			# next_state: [matrix]
 			# next_memory: [matrix]
-			rval = f_next(*([next_w, ctx0, ctx_mask, val0, val_mask]+next_state+next_memory))
+			print ('in gen sample' , ii, next_state[0].shape, next_memory[0].shape, next_state_key[0].shape, next_memory_key[0].shape, next_key_ctx[0].shape,next_val_ctx[0].shape)
+			rval = f_next(*([next_w, ctx0, ctx_mask, val0, val_mask]+next_state+next_memory+next_state_key+next_memory_key+next_key_ctx+next_val_ctx))
+			print (rval[2].shape, rval[3].shape)
 			next_p = rval[0]
 			if restrict_voc:
 				raise NotImplementedError()
@@ -840,13 +843,21 @@ class Attention(object):
 			next_memory = []
 			for lidx in xrange(n_layers_lstm):
 				next_memory.append(rval[2+n_layers_lstm+lidx])
+
+			next_state_key[0] = rval[4]
+			next_memory_key[0] = rval[5]
+			next_key_ctx[0] = rval[6]
+			next_val_ctx[0] = rval[7]
+			
 			if stochastic:
 				sample.append(next_w[0]) # take the most likely one
 				sample_score += next_p[0,next_w[0]]
+				print ('2 : ', next_state[0].shape)
 				if next_w[0] == 0:
 					break
 			else:
 				# the first run is (1,50000)
+				print ('3 : ', next_state[0].shape)
 				cand_scores = hyp_scores[:,None] - numpy.log(next_p)
 				cand_flat = cand_scores.flatten()
 				ranks_flat = cand_flat.argsort()[:(k-dead_k)]
@@ -883,7 +894,7 @@ class Attention(object):
 				hyp_memories = []
 				for lidx in xrange(n_layers_lstm):
 					hyp_memories.append([])
-
+				print len(new_hyp_samples)	
 				for idx in xrange(len(new_hyp_samples)):
 					if new_hyp_samples[idx][-1] == 0:
 						sample.append(new_hyp_samples[idx])
@@ -912,6 +923,7 @@ class Attention(object):
 				next_memory = []
 				for lidx in xrange(n_layers_lstm):
 					next_memory.append(numpy.array(hyp_memories[lidx]))
+				print ('5 : ', next_state[0].shape)
 
 		if not stochastic:
 			# dump every remaining one
@@ -1186,6 +1198,7 @@ class Attention(object):
 				if numpy.mod(uidx, saveFreq) == 0:
 					pass
 
+				sampleFreq = 10
 				if numpy.mod(uidx, sampleFreq) == 0:
 					use_noise.set_value(0.)
 					def sample_execute(from_which):
