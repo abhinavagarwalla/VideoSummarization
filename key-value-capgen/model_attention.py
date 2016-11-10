@@ -832,7 +832,7 @@ class Attention(object):
 			# next_memory: [matrix]
 			#print ('in gen sample' , ii, next_state[0].shape, next_memory[0].shape, next_state_key[0].shape, next_memory_key[0].shape, next_key_ctx[0].shape,next_val_ctx[0].shape)
 			rval = f_next(*([next_w, ctx0, ctx_mask, val0, val_mask]+next_state+next_memory+next_state_key+next_memory_key+next_key_ctx+next_val_ctx))
-			print (rval[2].shape, rval[3].shape)
+			#print (rval[2].shape, rval[3].shape, rval[4].shape, rval[5].shape)
 			next_p = rval[0]
 			if restrict_voc:
 				raise NotImplementedError()
@@ -857,7 +857,7 @@ class Attention(object):
 					break
 			else:
 				# the first run is (1,50000)
-				print ('3 : ', next_state[0].shape)
+				#print ('3 : ', next_state[0].shape)
 				cand_scores = hyp_scores[:,None] - numpy.log(next_p)
 				cand_flat = cand_scores.flatten()
 				ranks_flat = cand_flat.argsort()[:(k-dead_k)]
@@ -870,6 +870,7 @@ class Attention(object):
 				new_hyp_samples = []
 				new_hyp_scores = numpy.zeros(k-dead_k).astype('float32')
 				new_hyp_states = []
+				new_hyp_memories = []
 				new_hyp_state_key = []
 				new_hyp_memory_key = []
 				new_hyp_key_ctx = []
@@ -889,26 +890,28 @@ class Attention(object):
 					for lidx in xrange(n_layers_lstm):
 						new_hyp_memories[lidx].append(copy.copy(next_memory[lidx][ti]))
 
-					new_hyp_state_key.append(copy.copy(next_state_key[ti]))
-					new_hyp_memory_key.append(copy.copy(next_memory_key[ti]))
-					new_hyp_key_ctx.append(copy.copy(next_key_ctx[ti]))
-					new_hyp_val_ctx.append(copy.copy(next_val_ctx[ti]))
+					#print ('in idx', next_state_key[0][ti].shape, next_memory_key[0][ti].shape)
+					new_hyp_state_key.append(copy.copy(next_state_key[0][ti]))
+					new_hyp_memory_key.append(copy.copy(next_memory_key[0][ti]))
+					new_hyp_key_ctx.append(copy.copy(next_key_ctx[0][ti]))
+					new_hyp_val_ctx.append(copy.copy(next_val_ctx[0][ti]))
 
 				# check the finished samples
 				new_live_k = 0
 				hyp_samples = []
 				hyp_scores = []
 				hyp_states = []
+				hyp_memories = []
 				hyp_state_key = []
 				hyp_memory_key = []
 				hyp_key_ctx = []
 				hyp_val_ctx = []
 				for lidx in xrange(n_layers_lstm):
 					hyp_states.append([])
-				hyp_memories = []
+				
 				for lidx in xrange(n_layers_lstm):
 					hyp_memories.append([])
-				print len(new_hyp_samples)	
+				#print len(new_hyp_samples)	
 				for idx in xrange(len(new_hyp_samples)):
 					if new_hyp_samples[idx][-1] == 0:
 						sample.append(new_hyp_samples[idx])
@@ -937,18 +940,22 @@ class Attention(object):
 				next_w = numpy.array([w[-1] for w in hyp_samples])
 				next_state = []
 				next_memory = []
-
-				for lidx in xrange(n_layers_lstm):
-					next_state.append(numpy.array(hyp_states[lidx]))
-				
 				next_state_key = []
 				next_memory_key = []
 				next_key_ctx = []
 				next_val_ctx = []
+
+				for lidx in xrange(n_layers_lstm):
+					next_state.append(numpy.array(hyp_states[lidx]))
 				
+				next_state_key.append(numpy.array(hyp_state_key))
+				next_memory_key.append(numpy.array(hyp_memory_key))
+				next_key_ctx.append(numpy.array(hyp_key_ctx))
+				next_val_ctx.append(numpy.array(hyp_val_ctx))
+
 				for lidx in xrange(n_layers_lstm):
 					next_memory.append(numpy.array(hyp_memories[lidx]))
-				print ('5 : ', next_state[0].shape)
+				#print ('5 : ', next_state[0].shape)
 
 		if not stochastic:
 			# dump every remaining one
@@ -1223,6 +1230,7 @@ class Attention(object):
 				if numpy.mod(uidx, saveFreq) == 0:
 					pass
 
+				sampleFreq = 10
 				if numpy.mod(uidx, sampleFreq) == 0:
 					use_noise.set_value(0.)
 					def sample_execute(from_which):
