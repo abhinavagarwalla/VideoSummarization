@@ -29,7 +29,7 @@ class Movie2Caption(object):
         self.OutOf = outof
         self.value_dim = 4096
 
-        self.mb_size_train = 4 #mb_size_train
+        self.mb_size_train = 64 #mb_size_train
         self.mb_size_test = 64 #mb_size_test
         self.non_pickable = []
         
@@ -159,7 +159,7 @@ class Movie2Caption(object):
             self.valid = common.load_pkl(dataset_path + 'valid.pkl')
             self.test = common.load_pkl(dataset_path + 'test.pkl')
             self.CAP = common.load_pkl(dataset_path + 'CAP.pkl')
-            self.FEAT = common.load_pkl('../preprocessing/video_keys_conv.pkl')
+            self.FEAT = common.load_pkl(dataset_path + 'FEAT_key_vidID_value_features.pkl')
             self.VALUES = common.load_pkl('../preprocessing/video_values_conv.pkl')#dataset_path + 'FEAT_key_vidID_value_features.pkl')
             self.train_ids = ['vid%s'%i for i in range(1,1201)]
             self.valid_ids = ['vid%s'%i for i in range(1201,1301)]
@@ -176,7 +176,7 @@ class Movie2Caption(object):
         self.word_idict[1] = 'UNK'
         
         if self.video_feature == 'googlenet':
-            self.ctx_dim = 512
+            self.ctx_dim = 1024
         else:
             raise NotImplementedError()
         self.kf_train = common.generate_minibatch_idx(

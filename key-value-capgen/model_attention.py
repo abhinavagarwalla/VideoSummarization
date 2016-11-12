@@ -347,7 +347,7 @@ class Attention(object):
 
 			# attention
 			print ('in scan')
-			pstate_ = tensor.dot(h_, Wd_att) #+ tensor.dot(h_k, Wk_att)
+			pstate_ = tensor.dot(h_, Wd_att) + tensor.dot(h_k, Wk_att)
 			pctx_ = pctx_ + pstate_[:,None,:]
 			pctx_list = []
 			pctx_list.append(pctx_)
@@ -454,6 +454,13 @@ class Attention(object):
 		# embedding
 		params['Wemb'] = norm_weight(options['n_words'], options['dim_word'])
 		value_dim = options['value_dim']
+		ctx_dim = options['ctx_dim']
+
+		# init_state, init_hidden state and memory cell in key addressing LSTM
+		params = self.get_layer('ff')[0](
+			options, params, prefix='ff_state_key', nin=ctx_dim, nout=options['dim_key_add'])
+		params = self.get_layer('ff')[0](
+			options, params, prefix='ff_memory_key', nin=ctx_dim, nout=options['dim_key_add'])
 
 		if options['encoder'] == 'lstm_bi':
 			print 'bi-directional lstm encoder on ctx'
@@ -483,11 +490,7 @@ class Attention(object):
 		params = self.get_layer('ff')[0](
 			options, params, prefix='ff_memory', nin=ctx_dim, nout=options['dim'])
 
-		# init_state, init_hidden state and memory cell in key addressing LSTM
-		params = self.get_layer('ff')[0](
-			options, params, prefix='ff_state_key', nin=ctx_dim, nout=options['dim_key_add'])
-		params = self.get_layer('ff')[0](
-			options, params, prefix='ff_memory_key', nin=ctx_dim, nout=options['dim_key_add'])
+		
 
 		# decoder: LSTM
 		params = self.get_layer('lstm_cond')[0](options, params, prefix='decoder',
@@ -543,6 +546,11 @@ class Attention(object):
 
 		ctx_ = ctx
 
+		init_state_key = self.get_layer('ff')[1](
+			tparams, ctx.mean(1), options, prefix='ff_state_key', activ='tanh')
+		init_memory_key = self.get_layer('ff')[1](
+			tparams, ctx.mean(1), options, prefix='ff_memory_key', activ='tanh')
+
 		if options['encoder'] == 'lstm_bi':
 			# encoder
 			ctx_fwd = self.get_layer('lstm')[1](tparams, ctx_.dimshuffle(1,0,2),
@@ -579,10 +587,7 @@ class Attention(object):
 		init_memory = self.get_layer('ff')[1](
 			tparams, ctx_mean, options, prefix='ff_memory', activ='tanh')
 		
-		init_state_key = self.get_layer('ff')[1](
-			tparams, ctx.mean(1), options, prefix='ff_state_key', activ='tanh')
-		init_memory_key = self.get_layer('ff')[1](
-			tparams, ctx.mean(1), options, prefix='ff_memory_key', activ='tanh')
+		
 		
 		# decoder
 		proj = self.get_layer('lstm_cond')[1](tparams, emb, options,
@@ -651,6 +656,12 @@ class Attention(object):
 
 		ctx_ = ctx0
 		counts = ctx_mask.sum(-1)
+
+		init_state_key = [self.get_layer('ff')[1](
+			tparams, ctx_.mean(1), options, prefix='ff_state_key', activ='tanh')]
+		init_memory_key = [self.get_layer('ff')[1](
+			tparams, ctx_.mean(1), options, prefix='ff_memory_key', activ='tanh')]
+
 		if options['encoder'] == 'lstm_bi':
 			# encoder
 			ctx_fwd = self.get_layer('lstm')[1](tparams, ctx_,
@@ -688,10 +699,6 @@ class Attention(object):
 		init_memory = [self.get_layer('ff')[1](
 			tparams, ctx_mean, options, prefix='ff_memory', activ='tanh')]
 
-		init_state_key = [self.get_layer('ff')[1](
-			tparams, ctx.mean(1), options, prefix='ff_state_key', activ='tanh')]
-		init_memory_key = [self.get_layer('ff')[1](
-			tparams, ctx.mean(1), options, prefix='ff_memory_key', activ='tanh')]
 		
 		# init_key_ctx = ctx.mean(0)
 		# ini
@@ -818,7 +825,7 @@ class Attention(object):
 
 		next_key_ctx.append(numpy.mean(ctx0, axis=0).reshape((1, options['ctx_dim'])))
 		next_val_ctx.append(numpy.mean(val0, axis=0).reshape((1, options['value_dim'])))
-		print (numpy.asarray(ctx0).shape)
+		#print (numpy.asarray(ctx0).shape)
 
 		next_w = -1 * numpy.ones((1,)).astype('int64')
 		# next_state: [(1,512)]
@@ -1064,9 +1071,9 @@ class Attention(object):
 										   K, OutOf)
 		model_options['ctx_dim'] = self.engine.ctx_dim
 		model_options['value_dim'] = self.engine.value_dim
-		model_options['dim'] = 512
+		model_options['dim'] = 2048
 		model_options['dim_key_add'] = 1024
-		# model_options['encoder'] = 'lstm_uni'
+		model_options['encoder'] = 'lstm_uni'
 		# model_options['encoder_dim'] = 1024
 	# set test values, for debugging
 		[self.x_tv, self.mask_tv,
@@ -1230,7 +1237,6 @@ class Attention(object):
 				if numpy.mod(uidx, saveFreq) == 0:
 					pass
 
-				sampleFreq = 10
 				if numpy.mod(uidx, sampleFreq) == 0:
 					use_noise.set_value(0.)
 					def sample_execute(from_which):
@@ -1283,7 +1289,6 @@ class Attention(object):
 					sample_execute(from_which='train')
 					sample_execute(from_which='valid')
 
-				validFreq = 1000
 				if validFreq != -1 and numpy.mod(uidx, validFreq) == 0:
 					print "Validation scores"
 					t0_valid = time.time()
