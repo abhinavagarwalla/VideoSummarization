@@ -17,63 +17,68 @@ import cPickle as pickle
 from nltk.tokenize import RegexpTokenizer
 from moviepy.editor import *
 from keras import backend as K
+<<<<<<< HEAD
+=======
+
+>>>>>>> b9eb1bd315c716156c127c837177b47ea185bed9
 import math
 import os
 #import ipdb
+tf.python.control_flow_ops = tf
 
-# with tf.device('/cpu:0'):
+# with tf.device('/gpu:0'):
 def VGG_16(weights_path=None):
-    model = Sequential()
-    model.add(ZeroPadding2D((1,1),input_shape=(3,224,224)))
-    model.add(Convolution2D(64, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(64, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
+	model = Sequential()
+	model.add(ZeroPadding2D((1,1),input_shape=(3,224,224)))
+	model.add(Convolution2D(64, 3, 3, activation='relu'))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(64, 3, 3, activation='relu'))
+	model.add(MaxPooling2D((2,2), strides=(2,2)))
 
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(128, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(128, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(128, 3, 3, activation='relu'))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(128, 3, 3, activation='relu'))
+	model.add(MaxPooling2D((2,2), strides=(2,2)))
 
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(256, 3, 3, activation='relu'))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(256, 3, 3, activation='relu'))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(256, 3, 3, activation='relu'))
+	model.add(MaxPooling2D((2,2), strides=(2,2)))
 
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(512, 3, 3, activation='relu'))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(512, 3, 3, activation='relu'))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(512, 3, 3, activation='relu'))
+	model.add(MaxPooling2D((2,2), strides=(2,2)))
 
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(512, 3, 3, activation='relu'))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(512, 3, 3, activation='relu'))
+	model.add(ZeroPadding2D((1,1)))
+	model.add(Convolution2D(512, 3, 3, activation='relu'))
+	model.add(MaxPooling2D((2,2), strides=(2,2)))
 
-    model.add(Flatten())
-    model.add(Dense(4096, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(4096, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(1000, activation='softmax'))
+	model.add(Flatten())
+	model.add(Dense(4096, activation='relu'))
+	model.add(Dropout(0.5))
+	model.add(Dense(4096, activation='relu'))
+	model.add(Dropout(0.5))
+	model.add(Dense(1000, activation='softmax'))
 
-    if weights_path:
-        model.load_weights(weights_path)
+	if weights_path:
+		model.load_weights(weights_path)
 
-    sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(optimizer=sgd, loss='categorical_crossentropy')
-    vgg_out = K.function([model.layers[0].input, K.learning_phase()], [model.layers[29].output])
-    return vgg_out
+	sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
+	model.compile(optimizer=sgd, loss='categorical_crossentropy')
+	vgg_out = K.function([model.layers[0].input, K.learning_phase()], [model.layers[29].output])
+	return vgg_out
 
 class Caption_Generator():
 
@@ -92,7 +97,7 @@ class Caption_Generator():
 		self.n_lstm_steps = n_lstm_steps
 		self.batch_size = batch_size
 
-		with tf.device("/cpu:0"):
+		with tf.device("/gpu:0"):
 			self.Wemb = tf.Variable(tf.random_uniform([n_words, dim_embed], -1.0, 1.0), name='Wemb')
 
 		self.init_hidden_W = self.init_weight(dim_ctx, dim_hidden, name='init_hidden_W')
@@ -151,7 +156,7 @@ class Caption_Generator():
 				word_emb = tf.zeros([self.batch_size, self.dim_embed])
 			else:
 				tf.get_variable_scope().reuse_variables()
-				with tf.device("/cpu:0"):
+				with tf.device("/gpu:0"):
 					word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:,ind-1])
 
 			x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
@@ -252,14 +257,12 @@ class Caption_Generator():
 
 			max_prob_word = tf.argmax(logit_words, 1)
 
-			with tf.device("/cpu:0"):
+			with tf.device("/gpu:0"):
 				word_emb = tf.nn.embedding_lookup(self.Wemb, max_prob_word)
 
 			generated_words.append(max_prob_word)
 			logit_list.append(logit_words)
-
 		return context, generated_words, logit_list, alpha_list, hidden_state_list
-
 
 def preProBuildWordVocab(sentence_iterator, word_count_threshold=30): # borrowed this function from NeuralTalk
 	print 'preprocessing word counts and creating vocab based on word count threshold %d' % (word_count_threshold, )
@@ -290,7 +293,7 @@ def preProBuildWordVocab(sentence_iterator, word_count_threshold=30): # borrowed
 	return wordtoix, ixtoword, bias_init_vector
 
 n_epochs=1000
-batch_size=120
+batch_size=80
 dim_embed=256
 dim_ctx=512
 dim_hidden=256
@@ -299,7 +302,7 @@ pretrained_model_path = None
 #############################
 annotation_path = 'annotations.pickle'
 # feat_path = '../../show_attend_and_tell.tensorflow/data/feats.npy'
-model_path = 'model-35'
+model_path = './model-35'
 #############################
 
 def finish_parsing():
@@ -318,7 +321,6 @@ def finish_parsing():
 		model_path = os.path.abspath(args.m)
 		print "Saved model at %s" % model_path
 
-
 if __name__ == '__main__':
 	annotation_data = pd.read_pickle(annotation_path)
 	captions = annotation_data['caption'].values
@@ -326,7 +328,7 @@ if __name__ == '__main__':
 	n_words = len(wordtoix)
 
 	print 'Starting session', n_words
-	sess = tf.InteractiveSession(config=tf.ConfigProto(log_device_placement=True))
+	sess = tf.InteractiveSession()#config=tf.ConfigProto(log_device_placement=True))
 	print 'interetdd'
 	caption_generator = Caption_Generator(
 			n_words=n_words,
@@ -356,21 +358,25 @@ if __name__ == '__main__':
 		vid_ind += 1
 		if '.avi' not in filename:
 			continue
+		filename='vid100.avi'
 		video = VideoFileClip('../data/youtubeclips-dataset/' + filename)
 		img_list = []
 		for frame in video.iter_frames():
 			img_list.append(np.transpose(misc.imresize(frame, (vgg16_nrows, vgg16_ncols, vgg16_nchannels)), (2, 0, 1)))
 
-		num_frames = 52
+		num_frames = 10
 		vgg_feat = (vgg16_out([img_list[:num_frames], 0])[0])
 		vgg_feat = np.transpose(np.reshape(vgg_feat, (vgg_feat.shape[0], vgg_feat.shape[1], vgg_feat.shape[2] * vgg_feat.shape[3])), (0, 2, 1))
-		video_key[filename.replace('.avi', '')] = vgg_feat
-		
+		#video_key[filename.replace('.avi', '')] = vgg_feat
+		#vgg_feat = np.load('../../bak_vs/show_attend_and_tell/data/image_feats.npy').reshape(-1, ctx_shape[1], ctx_shape[0]).swapaxes(1,2)
 		generated_word_index = sess.run(generated_words, feed_dict={context:vgg_feat})
-		generated_words_tmp = [ixtoword[x[0]] for x in generated_word_index]
+		gwi = np.array(generated_word_index)
+		generated_words_tmp = [[ixtoword[gwi[i,j]] for i in range(0, gwi.shape[0])] for j in range(0, gwi.shape[1])]
 		punctuation = np.argmax(np.array(generated_words_tmp) == '.')+1
-		values = (sess.run([hidden_state_list[punctuation]], feed_dict={context:vgg_feat}))[0]
-		video_val[filename.replace('.avi', '')] = values
+		#values = (sess.run([hidden_state_list[punctuation]], feed_dict={context:vgg_feat}))[0]
+		#video_val[filename.replace('.avi', '')] = values
+		print generated_word_index, len(generated_word_index), generated_words_tmp, punctuation
+		exit()
 		# print vgg_feat.shape, video_val[filename.replace('.avi', '')].shape, type(values)
 
 		for j in range(1, ((len(img_list) - 1) / num_frames) + 1):

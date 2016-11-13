@@ -10,7 +10,6 @@
 *.dmg
 *.gz
 *.iso
-*.jar
 *.rar
 *.tar
 *.zip
@@ -22,3 +21,5 @@
 *.svg
 *.ico
 data
+*.npz
+*.pkl
