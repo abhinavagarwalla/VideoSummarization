@@ -29,14 +29,15 @@ class Movie2Caption(object):
         self.OutOf = outof
         self.value_dim = 4096
 
-        self.mb_size_train = 64 #mb_size_train
-        self.mb_size_test = 64 #mb_size_test
+        self.mb_size_train = 50 #mb_size_train
+        self.mb_size_test = 50 #mb_size_test
         self.non_pickable = []
         
         self.load_data()
         
     def _filter_googlenet(self, vidID):
         feat = self.FEAT[vidID]
+#	print ('data_engine', feat.shape)
         feat = self.get_sub_frames(feat)
         return feat
     
@@ -256,7 +257,7 @@ def prepare_data(engine, idx):
     for idx, s in enumerate(seqs):
         x[:lengths[idx],idx] = s
         x_mask[:lengths[idx]+1,idx] = 1.
-    
+#    print ('data_engine', y.shape)	    
     return x, x_mask, y, y_mask, val_list, y_mask
     
 def test_data_engine():

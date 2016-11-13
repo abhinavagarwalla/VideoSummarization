@@ -658,7 +658,7 @@ class Attention(object):
 		print 'Building f_init...',
 		f_init = theano.function(
 			[ctx0, ctx_mask],
-			[ctx0]+init_state+init_memory, name='f_init',
+			[ctx]+init_state+init_memory, name='f_init',
 			on_unused_input='ignore',
 			profile=False, mode=mode)
 		print 'Done'
@@ -751,7 +751,7 @@ class Attention(object):
 
 		# [(26,1024),(512,),(512,)]
 		rval = f_init(ctx0, ctx_mask)
-		ctx0 = rval[0]
+		ctx_ = rval[0][0]
 
 		next_state = []
 		next_memory = []
@@ -767,9 +767,9 @@ class Attention(object):
 			next_memory.append(rval[1+n_layers_lstm+lidx])
 			next_memory[-1] = next_memory[-1].reshape([live_k, next_memory[-1].shape[0]])
 
-		next_key_ctx.append(numpy.mean(ctx0, axis=0).reshape((1, options['ctx_dim'])))
-		next_val_ctx.append(numpy.mean(val0, axis=0).reshape((1, options['value_dim'])))
-		print (numpy.asarray(ctx0).shape)
+		next_key_ctx.append(numpy.mean(ctx_, axis=0).reshape((live_k, ctx_.shape[-1])))
+		next_val_ctx.append(numpy.mean(val0, axis=0).reshape((live_k, options['value_dim'])))
+		#print (numpy.asarray(ctx0).shape)
 
 		next_w = -1 * numpy.ones((1,)).astype('int64')
 		# next_state: [(1,512)]
@@ -983,7 +983,7 @@ class Attention(object):
 			  ):
 		self.rng_numpy, self.rng_theano = common.get_two_rngs()
 
-		save_model_dir = 'kv_densecapgnet_oldkey2048'
+		save_model_dir = 'kv_densecapgnet_oldkey'
 		model_options = locals().copy()
 		if 'self' in model_options:
 			del model_options['self']
@@ -1000,9 +1000,9 @@ class Attention(object):
 										   K, OutOf)
 		model_options['ctx_dim'] = self.engine.ctx_dim
 		model_options['value_dim'] = self.engine.value_dim
-		model_options['dim'] = 2048
+		model_options['dim'] = 1560
 		#model_options['dim_key_add'] = 1024
-		# model_options['encoder'] = 'lstm_uni'
+		model_options['encoder'] = 'lstm_uni'
 		# model_options['encoder_dim'] = 1024
 	# set test values, for debugging
 		[self.x_tv, self.mask_tv,
@@ -1013,13 +1013,13 @@ class Attention(object):
 		t0 = time.time()
 		params = self.init_params(model_options)
 		# reloading
-		#reload_ = True
+		reload_ = True
 		if reload_:
-			model_saved = 'model2.npz'
+			model_saved = 'kv_densecapgnet_oldkeymodel_current.npz'
 			assert os.path.isfile(model_saved)
 			print "Reloading model params..."
 			params = load_params(model_saved, params)
-		#reload_ = False
+		reload_ = False
 
 		tparams = init_tparams(params)
 
@@ -1302,24 +1302,26 @@ class Attention(object):
 					valid_B4 = scores['valid']['Bleu_4']
 					valid_Rouge = scores['valid']['ROUGE_L']
 					valid_Cider = scores['valid']['CIDEr']
-					valid_meteor = scores['valid']['METEOR']
+					#valid_meteor = scores['valid']['METEOR']
 					test_B1 = scores['test']['Bleu_1']
 					test_B2 = scores['test']['Bleu_2']
 					test_B3 = scores['test']['Bleu_3']
 					test_B4 = scores['test']['Bleu_4']
 					test_Rouge = scores['test']['ROUGE_L']
 					test_Cider = scores['test']['CIDEr']
-					test_meteor = scores['test']['METEOR']
+					#test_meteor = scores['test']['METEOR']
 					print 'computing meteor/blue score used %.4f sec, '\
-					  'blue score: %.1f, meteor score: %.1f'%(
-					time.time()-blue_t0, valid_B4, valid_meteor)
+					  'blue score: %.1f, meteor score:'%(
+					time.time()-blue_t0, valid_B4)#, valid_meteor)
 					history_errs.append([eidx, uidx, train_err, train_perp,
 										 valid_perp, test_perp,
 										 valid_err, test_err,
 										 valid_B1, valid_B2, valid_B3,
-										 valid_B4, valid_meteor, valid_Rouge, valid_Cider,
+										 valid_B4,# valid_meteor,
+										 valid_Rouge, valid_Cider,
 										 test_B1, test_B2, test_B3,
-										 test_B4, test_meteor, test_Rouge, test_Cider])
+										 test_B4,# test_meteor,
+										 test_Rouge, test_Cider])
 					numpy.savetxt(save_model_dir+'train_valid_test.txt',
 								  history_errs, fmt='%.3f')
 					print 'save validation results to %s'%save_model_dir
