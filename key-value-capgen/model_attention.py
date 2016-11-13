@@ -800,7 +800,7 @@ class Attention(object):
 
 		# [(26,1024),(512,),(512,)]
 		rval = f_init(ctx0, ctx_mask)
-		ctx0 = rval[0]
+		ctx0 = rval[0][0]
 
 		next_state = []
 		next_memory = []
@@ -823,8 +823,8 @@ class Attention(object):
 		next_memory_key.append(rval[2 + 2 * n_layers_lstm])
 		next_memory_key[-1] = next_memory_key[-1].reshape([live_k, next_memory_key[-1].shape[0]])
 
-		next_key_ctx.append(numpy.asarray([numpy.mean(ctx0, axis=0)]))#.reshape((1, options['ctx_dim'])))
-		next_val_ctx.append(numpy.asarray([numpy.mean(val0, axis=0)]))#.reshape((1, options['value_dim'])))
+		next_key_ctx.append(numpy.mean(ctx0, axis=0).reshape((live_k, ctx0.shape[-1])))
+		next_val_ctx.append(numpy.mean(val0, axis=0).reshape((live_k, options['value_dim'])))
 		#print (numpy.asarray(ctx0).shape)
 
 		next_w = -1 * numpy.ones((1,)).astype('int64')
