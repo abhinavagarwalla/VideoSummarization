@@ -29,8 +29,8 @@ class Movie2Caption(object):
         self.OutOf = outof
         self.value_dim = 4096
 
-        self.mb_size_train = 32 #mb_size_train
-        self.mb_size_test = 32 #mb_size_test
+        self.mb_size_train = 16 #mb_size_train
+        self.mb_size_test = 16 #mb_size_test
         self.non_pickable = []
         
         self.load_data()

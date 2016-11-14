@@ -703,7 +703,7 @@ class Attention(object):
 		print 'Building f_init...',
 		f_init = theano.function(
 			[ctx0, ctx_mask],
-			[ctx0]+init_state+init_memory+init_state_key+init_memory_key, name='f_init',
+			[ctx]+init_state+init_memory+init_state_key+init_memory_key, name='f_init',
 			on_unused_input='ignore',
 			profile=False, mode=mode)
 		print 'Done'
@@ -800,7 +800,7 @@ class Attention(object):
 
 		# [(26,1024),(512,),(512,)]
 		rval = f_init(ctx0, ctx_mask)
-		ctx0 = rval[0][0]
+		ctx_ = rval[0][0]
 
 		next_state = []
 		next_memory = []
@@ -823,7 +823,7 @@ class Attention(object):
 		next_memory_key.append(rval[2 + 2 * n_layers_lstm])
 		next_memory_key[-1] = next_memory_key[-1].reshape([live_k, next_memory_key[-1].shape[0]])
 
-		next_key_ctx.append(numpy.mean(ctx0, axis=0).reshape((live_k, ctx0.shape[-1])))
+		next_key_ctx.append(numpy.mean(ctx_, axis=0).reshape((live_k, ctx_.shape[-1])))
 		next_val_ctx.append(numpy.mean(val0, axis=0).reshape((live_k, options['value_dim'])))
 		#print (numpy.asarray(ctx0).shape)
 
@@ -1054,7 +1054,7 @@ class Attention(object):
 			  ):
 		self.rng_numpy, self.rng_theano = common.get_two_rngs()
 
-		save_model_dir = 'kv_densecap_fc1'
+		save_model_dir = 'kv_densecap_lstmka_'
 		model_options = locals().copy()
 		if 'self' in model_options:
 			del model_options['self']
@@ -1071,9 +1071,9 @@ class Attention(object):
 										   K, OutOf)
 		model_options['ctx_dim'] = self.engine.ctx_dim
 		model_options['value_dim'] = self.engine.value_dim
-		model_options['dim'] = 60
-		model_options['dim_key_add'] = 24
-		model_options['encoder'] = 'lstm_uni'
+		model_options['dim'] = 2500
+		model_options['dim_key_add'] = 1200
+		#model_options['encoder'] = 'lstm_uni'
 		# model_options['encoder_dim'] = 1024
 	# set test values, for debugging
 		[self.x_tv, self.mask_tv,
@@ -1236,7 +1236,7 @@ class Attention(object):
 						alphas.min(-1).mean() / (alphas.max(-1)).mean(), reg)
 				if numpy.mod(uidx, saveFreq) == 0:
 					pass
-				sampleFreq = 10
+
 				if numpy.mod(uidx, sampleFreq) == 0:
 					use_noise.set_value(0.)
 					def sample_execute(from_which):
@@ -1289,7 +1289,6 @@ class Attention(object):
 					sample_execute(from_which='train')
 					sample_execute(from_which='valid')
 
-				validFreq = 10
 				if validFreq != -1 and numpy.mod(uidx, validFreq) == 0:
 					print "Validation scores"
 					t0_valid = time.time()
@@ -1373,24 +1372,24 @@ class Attention(object):
 					valid_B4 = scores['valid']['Bleu_4']
 					valid_Rouge = scores['valid']['ROUGE_L']
 					valid_Cider = scores['valid']['CIDEr']
-					valid_meteor = scores['valid']['METEOR']
+					#valid_meteor = scores['valid']['METEOR']
 					test_B1 = scores['test']['Bleu_1']
 					test_B2 = scores['test']['Bleu_2']
 					test_B3 = scores['test']['Bleu_3']
 					test_B4 = scores['test']['Bleu_4']
 					test_Rouge = scores['test']['ROUGE_L']
 					test_Cider = scores['test']['CIDEr']
-					test_meteor = scores['test']['METEOR']
+					#test_meteor = scores['test']['METEOR']
 					print 'computing meteor/blue score used %.4f sec, '\
-					  'blue score: %.1f, meteor score: %.1f'%(
-					time.time()-blue_t0, valid_B4, valid_meteor)
+					  'blue score: %.1f'%(
+					time.time()-blue_t0, valid_B4)#, valid_meteor)
 					history_errs.append([eidx, uidx, train_err, train_perp,
 										 valid_perp, test_perp,
 										 valid_err, test_err,
 										 valid_B1, valid_B2, valid_B3,
-										 valid_B4, valid_meteor, valid_Rouge, valid_Cider,
+										 valid_B4, valid_Rouge, valid_Cider,
 										 test_B1, test_B2, test_B3,
-										 test_B4, test_meteor, test_Rouge, test_Cider])
+										 test_B4, test_Rouge, test_Cider])
 					numpy.savetxt(save_model_dir+'train_valid_test.txt',
 								  history_errs, fmt='%.3f')
 					print 'save validation results to %s'%save_model_dir
