@@ -2,23 +2,44 @@ from __future__ import division
 import numpy as np
 import theano.tensor as T
 
+from keras.engine.topology import Layer
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, AveragePooling2D
 from keras.layers.recurrent import Recurrent
 from keras import initializations
 from keras import activations
 from keras import backend as K
+import keras
 from keras.models import Sequential, Model
 from keras.layers import Input, ConvLSTM2D, Flatten, Dense, Merge, merge
 from keras.layers.core import Reshape
-import extra 
+#import extra 
 from keras.engine.topology import Layer
 from keras.layers.wrappers import TimeDistributed
+import os, scipy.misc
+from moviepy.editor import *
+
+class Normalize(Layer):
+    '''
+    Custom layer to normalize the input
+    '''
+    def __init__(self, **kwargs):
+        super(Normalize, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        pass
+
+    def call(self, x, mask=None):
+        return (x / 5.0)
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape
+
 
 def LSTM_RCN(include_top=True, weights='imagenet',
 		  input_tensor=None, input_shape=None,
 		  classes=1000):
 
-	img_input = Input(shape=(28, 3, 224, 224))
+	img_input = Input(shape=(10, 3, 224, 224))
 
 	# Block 1
 	td_conv1_1 = TimeDistributed(Convolution2D(64, 3, 3, activation='relu', border_mode='same', name='block1_conv1'))(img_input)
@@ -33,7 +54,7 @@ def LSTM_RCN(include_top=True, weights='imagenet',
 	# Block 3
 	td_conv3_1 = TimeDistributed(Convolution2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv1'))(td_pool2)
 	td_conv3_2 = TimeDistributed(Convolution2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv2'))(td_conv3_1)
-	td_conv3_3 = TimeDistributed(Convolution2D(256, 3, 3, activation='relu', border_mode='same', name='block3_conv3'))(td_conv3_2)
+	td_conv3_3 = TimeDistributed(Convolution2D(32, 3, 3, activation='relu', border_mode='same', name='block3_conv3'))(td_conv3_2)
 	td_pool3   = TimeDistributed(MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool'))(td_conv3_3)
 
 	# Block 4
@@ -47,7 +68,6 @@ def LSTM_RCN(include_top=True, weights='imagenet',
 	td_conv5_2 = TimeDistributed(Convolution2D(512, 3, 3, activation='relu', border_mode='same', name='block5_conv2'))(td_conv5_1)
 	td_conv5_3 = TimeDistributed(Convolution2D(512, 3, 3, activation='relu', border_mode='same', name='block5_conv3'))(td_conv5_2)
 	td_pool5   = TimeDistributed(MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool'))(td_conv5_3)
-	
 
 	x   = TimeDistributed(Flatten(name='flatten'))(td_pool5)
 	fc7 = TimeDistributed(Dense(4096, activation='relu', name='fc1'))(x)
@@ -71,18 +91,19 @@ def LSTM_RCN(include_top=True, weights='imagenet',
 	flat_rcn4 = Flatten()(pool_rcn4)
 	flat_rcn5 = Flatten()(pool_rcn5)
 
-	dense_c1 = Dense(2, activation='softmax')(flat_rcn1)
-	dense_c2 = Dense(2, activation='softmax')(flat_rcn2)
-	dense_c3 = Dense(2, activation='softmax')(flat_rcn3)	
-	dense_c4 = Dense(2, activation='softmax')(flat_rcn4)
-	dense_c5 = Dense(2, activation='softmax')(flat_rcn5)
+	dense_c1 = Dense(101, activation='softmax')(flat_rcn1)
+	dense_c2 = Dense(101, activation='softmax')(flat_rcn2)
+	dense_c3 = Dense(101, activation='softmax')(flat_rcn3)	
+	dense_c4 = Dense(101, activation='softmax')(flat_rcn4)
+	dense_c5 = Dense(101, activation='softmax')(flat_rcn5)
 
 	merged_model = merge([dense_c1, dense_c2, dense_c3, dense_c4, dense_c5], mode='sum')
-	model = Model(img_input, merged_model)
-	model.summary()
+
+	output = Normalize()(merged_model)
+	model = Model(img_input, output)
+	print model.summary()
 
 	return model
-
 
 class GRU_RCN(Recurrent):
 	"""RNN with all connections being convolutions:
@@ -222,15 +243,78 @@ class GRU_RCN(Recurrent):
 		base_config = super(ConvGRU, self).get_config()
 		return dict(list(base_config.items()) + list(config.items()))
 
+def read_video(filename):
+	video = VideoFileClip('../../../UCF/' + filename)
+	img_list = []
+	
+	for frame in video.iter_frames():
+		img_list.append(np.transpose(scipy.misc.imresize(frame, (224, 224, 3)), (2, 0, 1)))
+	img_list = np.asarray(img_list)
+
+	indexed = np.int32(np.linspace(0, len(img_list) - 1, 10))
+	return img_list[indexed]
+
 if __name__=='__main__':
-	for filename in os.listdir(''):
-		vid_ind += 1
-		if '.avi' not in filename:
+	#print ('in main')
+	model = LSTM_RCN()
+
+	train_data = []
+	# Read the training files
+	with open('../../../UCF/ucfTrainTestlist/trainlist01.txt') as f:
+		data = f.readlines()
+		for row in data:
+			row = row.split(' ')
+			train_data.append([row[0].split('/')[-1], int(row[1].replace('\r\n', ''))])
+
+	with open('../../../UCF/ucfTrainTestlist/trainlist02.txt') as f:
+		data = f.readlines()
+		for row in data:
+			row = row.split(' ')
+			train_data.append([row[0].split('/')[-1], int(row[1].replace('\r\n', ''))])
+
+	with open('../../../UCF/ucfTrainTestlist/trainlist03.txt') as f:
+		data = f.readlines()
+		for row in data:
+			row = row.split(' ')
+			train_data.append([row[0].split('/')[-1], int(row[1].replace('\r\n', ''))])
+
+
+	test_data = []
+	# Read the test files
+	with open('../../../UCF/ucfTrainTestlist/testlist01.txt') as f:
+		data = f.readlines()
+		for row in data:
+			test_data.append(row.replace('\r\n', '').split('/')[-1])
+
+	with open('../../../UCF/ucfTrainTestlist/testlist02.txt') as f:
+		data = f.readlines()
+		for row in data:
+			test_data.append(row.replace('\r\n', '').split('/')[-1])
+
+	with open('../../../UCF/ucfTrainTestlist/testlist03.txt') as f:
+		data = f.readlines()
+		for row in data:
+			test_data.append(row.replace('\r\n', '').split('/')[-1])
+
+	print (len(test_data), len(train_data))
+
+	trainX, trainY = [], []
+	for data in train_data:
+		if '.avi' not in data[0]:
 			continue
-		video = VideoFileClip('../data/youtubeclips-dataset/' + filename)
-		img_list = []
-		for frame in video.iter_frames():
-			img_list.append(np.transpose(misc.imresize(frame, (224, 224, 3)), (2, 0, 1)))
-
-
-VGG16(input_shape=(3, 224, 224))
+		trainX.append(read_video(data[0]))
+		trainY.append(data[1])	
+		if len(trainX) == 10:
+			break
+		print ('here')
+	
+	trainX = np.asarray(trainX)
+	trainY = np.asarray(trainY)
+	
+	print (trainX.shape, trainY.shape)
+	model.compile(optimizer='adam',
+              	  loss='categorical_crossentropy',
+              	  metrics=['accuracy'])
+	model.fit(trainX, keras.utils.np_utils.to_categorical(trainY, 101), nb_epoch=10, batch_size=2)
+	model.save('my_model.h5')
+#VGG16(input_shape=(3, 224, 224))
