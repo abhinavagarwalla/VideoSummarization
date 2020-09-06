@@ -1071,11 +1071,11 @@ class Attention(object):
 										   K, OutOf)
 		model_options['ctx_dim'] = self.engine.ctx_dim
 		model_options['value_dim'] = self.engine.value_dim
-		model_options['dim'] = 2500
-		model_options['dim_key_add'] = 1200
-		#model_options['encoder'] = 'lstm_uni'
+		model_options['dim'] = 1024
+		model_options['dim_key_add'] = 512
+		# model_options['encoder'] = 'lstm_uni'
 		# model_options['encoder_dim'] = 1024
-	# set test values, for debugging
+		# set test values, for debugging
 		[self.x_tv, self.mask_tv,
 		 self.ctx_tv, self.ctx_mask_tv, self.value_tv, self.value_mask_tv] = data_engine.prepare_data(
 			self.engine, self.engine.kf_train[0])#[self.engine.train[index] for index in idx])
@@ -1289,6 +1289,10 @@ class Attention(object):
 					sample_execute(from_which='train')
 					sample_execute(from_which='valid')
 
+<<<<<<< 10574f9df9872769b65bf0fee6441d9aa0dafaf2
+=======
+				validFreq = 10
+>>>>>>> Pushing Local File
 				if validFreq != -1 and numpy.mod(uidx, validFreq) == 0:
 					print "Validation scores"
 					t0_valid = time.time()
